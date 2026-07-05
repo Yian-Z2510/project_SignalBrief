@@ -55,7 +55,10 @@ jobs:
             "deliveryTime": "09:00",
             "delivery": {
               "method": "email",
-              "email": "yian.zhou2024@hotmail.com"
+              "emails": [
+                "yian.zhou2024@hotmail.com",
+                "wenyig@umich.edu"
+              ]
             },
             "onboardingComplete": true
           }

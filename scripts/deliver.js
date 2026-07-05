@@ -124,9 +124,20 @@ async function sendTelegram(text, botToken, chatId) {
 
 // -- Email Delivery (Resend) -------------------------------------------------
 
+function getEmailRecipients(delivery) {
+  const recipients = Array.isArray(delivery.emails)
+    ? delivery.emails
+    : [delivery.email];
+
+  return recipients
+    .filter((email) => typeof email === 'string')
+    .map((email) => email.trim())
+    .filter(Boolean);
+}
+
 // Sends the digest via Resend's email API.
-// The user provides their own Resend API key and email address.
-async function sendEmail(text, apiKey, toEmail) {
+// The user provides their own Resend API key and email address(es).
+async function sendEmail(text, apiKey, toEmails) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -135,7 +146,7 @@ async function sendEmail(text, apiKey, toEmail) {
     },
     body: JSON.stringify({
       from: 'AI Builders Digest <digest@resend.dev>',
-      to: [toEmail],
+      to: toEmails,
       subject: `AI Builders Digest — ${new Date().toLocaleDateString('en-US', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
       })}`,
@@ -186,14 +197,14 @@ async function main() {
 
       case 'email': {
         const apiKey = process.env.RESEND_API_KEY;
-        const toEmail = delivery.email;
+        const toEmails = getEmailRecipients(delivery);
         if (!apiKey) throw new Error('RESEND_API_KEY not found in .env');
-        if (!toEmail) throw new Error('delivery.email not found in config.json');
-        await sendEmail(digestText, apiKey, toEmail);
+        if (toEmails.length === 0) throw new Error('delivery.email or delivery.emails not found in config.json');
+        await sendEmail(digestText, apiKey, toEmails);
         console.log(JSON.stringify({
           status: 'ok',
           method: 'email',
-          message: `Digest sent to ${toEmail}`
+          message: `Digest sent to ${toEmails.join(', ')}`
         }));
         break;
       }
