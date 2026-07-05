@@ -1,0 +1,67 @@
+name: Send AI Builders Digest
+
+on:
+  schedule:
+    # GitHub cron uses UTC. Run at both possible UTC hours for 09:00 Europe/Dublin
+    # and gate in the job so daylight saving time does not duplicate sends.
+    - cron: "0 8,9 * * *"
+  workflow_dispatch:
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Dublin delivery hour
+        if: github.event_name == 'schedule'
+        id: delivery_time
+        run: |
+          hour="$(TZ=Europe/Dublin date +%H)"
+          if [ "$hour" = "09" ]; then
+            echo "should_send=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_send=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
+
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
+        run: cd scripts && npm ci
+
+      - name: Configure delivery
+        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          if [ -z "$RESEND_API_KEY" ]; then
+            echo "Missing RESEND_API_KEY repository secret" >&2
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.follow-builders"
+          cat > "$HOME/.follow-builders/config.json" <<'JSON'
+          {
+            "platform": "github-actions",
+            "language": "zh",
+            "timezone": "Europe/Dublin",
+            "frequency": "daily",
+            "deliveryTime": "09:00",
+            "delivery": {
+              "method": "email",
+              "email": "yian.zhou2024@hotmail.com"
+            },
+            "onboardingComplete": true
+          }
+          JSON
+          printf 'RESEND_API_KEY=%s\n' "$RESEND_API_KEY" > "$HOME/.follow-builders/.env"
+
+      - name: Generate and send briefing
+        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
+        run: cd scripts && node prepare-digest.js | node generate-briefing.js | node deliver.js
