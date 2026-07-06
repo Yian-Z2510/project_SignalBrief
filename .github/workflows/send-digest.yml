@@ -1,12 +1,6 @@
 name: Send AI Builders Digest
 
 on:
-  schedule:
-    # GitHub cron uses UTC. Run at both possible UTC hours for the configured
-    # Europe/Dublin delivery time and gate by the scheduled slot so delayed jobs
-    # still send. Update these with: cd scripts && npm run set-delivery-time -- HH:MM
-    - cron: "20 13 * * *"
-    - cron: "20 14 * * *"
   workflow_dispatch:
 
 jobs:
@@ -17,43 +11,16 @@ jobs:
       DIGEST_DELIVERY_TIME: "14:20"
 
     steps:
-      - name: Check Dublin delivery hour
-        if: github.event_name == 'schedule'
-        id: delivery_time
-        run: |
-          case "${{ github.event.schedule }}" in
-            "20 13 * * *") scheduled_utc_hour="13"; scheduled_utc_minute="20" ;;
-            "20 14 * * *") scheduled_utc_hour="14"; scheduled_utc_minute="20" ;;
-            *)
-              echo "Unknown schedule: ${{ github.event.schedule }}" >&2
-              echo "should_send=false" >> "$GITHUB_OUTPUT"
-              exit 0
-              ;;
-          esac
-
-          scheduled_local_time="$(TZ="$DIGEST_TIMEZONE" date -d "$(date -u +%F) ${scheduled_utc_hour}:${scheduled_utc_minute} UTC" +%H:%M)"
-          echo "Scheduled UTC time ${scheduled_utc_hour}:${scheduled_utc_minute} maps to ${DIGEST_TIMEZONE} time ${scheduled_local_time}"
-
-          if [ "$scheduled_local_time" = "$DIGEST_DELIVERY_TIME" ]; then
-            echo "should_send=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_send=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - uses: actions/checkout@v4
-        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
 
       - uses: actions/setup-node@v4
-        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
         with:
           node-version: "20"
 
       - name: Install dependencies
-        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
         run: cd scripts && npm ci
 
       - name: Configure delivery
-        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
@@ -80,5 +47,4 @@ jobs:
           printf 'RESEND_API_KEY=%s\n' "$RESEND_API_KEY" > "$HOME/.follow-builders/.env"
 
       - name: Generate and send briefing
-        if: github.event_name == 'workflow_dispatch' || steps.delivery_time.outputs.should_send == 'true'
         run: cd scripts && node prepare-digest.js | node generate-briefing.js | node deliver.js
