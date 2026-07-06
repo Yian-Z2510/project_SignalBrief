@@ -6,7 +6,8 @@
   "scripts": {
     "generate-feed": "node generate-feed.js",
     "prepare-digest": "node prepare-digest.js",
-    "generate-briefing": "node generate-briefing.js"
+    "generate-briefing": "node generate-briefing.js",
+    "set-delivery-time": "node set-delivery-time.js"
   },
   "dependencies": {
     "dotenv": "^16.4.0",

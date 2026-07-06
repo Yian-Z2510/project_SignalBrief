@@ -11,4 +11,4 @@ The workflow fetches the public Follow Builders central feeds, turns them into a
 3. Put your Resend API key as the value.
 4. Open `Actions` -> `Send AI Builders Digest` -> `Run workflow` to test manually.
 
-The scheduled workflow runs daily at 09:00 Europe/Dublin.
+The scheduled workflow runs daily at about 14:20 Europe/Dublin.
