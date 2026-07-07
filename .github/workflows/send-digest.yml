@@ -10,6 +10,9 @@ jobs:
       DIGEST_TIMEZONE: Europe/Dublin
       DIGEST_DELIVERY_TIME: "07:00"
       DIGEST_FROM: "AI Builders Digest <digest@digest.yianz.me>"
+      OPENAI_MODEL: gpt-5.4-mini
+      OPENAI_REASONING_EFFORT: medium
+      DIGEST_PROMPT_VERSION: ai-digest-yian-style-v1
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +58,9 @@ jobs:
             if [ -n "$OPENAI_API_KEY" ]; then
               printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
             fi
+            printf 'OPENAI_MODEL=%s\n' "$OPENAI_MODEL"
+            printf 'OPENAI_REASONING_EFFORT=%s\n' "$OPENAI_REASONING_EFFORT"
+            printf 'DIGEST_PROMPT_VERSION=%s\n' "$DIGEST_PROMPT_VERSION"
           } > "$HOME/.follow-builders/.env"
 
       - name: Generate and send briefing

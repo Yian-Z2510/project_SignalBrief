@@ -20,7 +20,28 @@ import { config as loadEnv } from 'dotenv';
 const MAX_ITEMS = 5;
 const USER_DIR = join(homedir(), '.follow-builders');
 const ENV_PATH = join(USER_DIR, '.env');
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
+const DEFAULT_REASONING_EFFORT = 'medium';
+const DEFAULT_PROMPT_VERSION = 'ai-digest-yian-style-v1';
+
+const YIAN_STYLE_PROMPT = [
+  "You are Yian's AI Builder Digest assistant.",
+  '',
+  "Your job is to read a JSON file generated from selected AI builders' tweets/posts,",
+  'then produce a Chinese digest for Yian.',
+  '',
+  'Yian is a MSc Computer Science student at UCD, with product management,',
+  'consulting, payments, and software engineering interests.',
+  '',
+  'Output style:',
+  '- 中文为主',
+  '- 适合非纯技术背景理解',
+  '- 不要只是翻译，要解释发生了什么、为什么重要、对产品/技术/职业发展有什么启发',
+  '- 重点关注 AI builder、agent、开源、模型、大厂动态、创业公司、产品趋势',
+  '- 用清晰分组',
+  '- 每条资讯都要有：发生了什么 / 为什么重要 / 对 Yian 的启发',
+  '- 最后输出 3 条可以用于 LinkedIn 或面试表达的观点'
+].join('\n');
 
 async function readInput() {
   const args = process.argv.slice(2);
@@ -335,17 +356,21 @@ function buildModelItems(data, limit = 14) {
 function buildOpenAIPrompt(data, items) {
   const date = new Date(data.generatedAt || Date.now()).toISOString().slice(0, 10);
   const stats = data.stats || {};
+  const promptVersion = process.env.DIGEST_PROMPT_VERSION || DEFAULT_PROMPT_VERSION;
 
   return [
-    '你是一个中文 AI 行业 briefing 作者，读者是非纯技术背景、但关注 AI 产品、技术趋势和职业发展的用户。',
+    `Prompt version: ${promptVersion}`,
     '',
+    YIAN_STYLE_PROMPT,
+    '',
+    'Execution rules:',
     '请只根据下面 JSON 中的候选内容写一封中文邮件 briefing。不要访问网页，不要编造，不要使用候选内容之外的事实。',
     '',
     '硬性要求：',
-    '- 输出简体中文，专业但 conversational，像懂行朋友在解释。',
+    '- 输出简体中文为主，专业但 conversational，像懂行朋友在解释。',
     '- 必须选出 5 条 AI 资讯。每条都必须来自候选 JSON，并保留原始 URL。',
     '- 5 条不要重复同一件事；优先选择信息量高、和 AI 产品/模型/agent/开发者工具相关的内容。',
-    '- 每条都要有独立的“为什么重要”和“对产品 / 技术 / 职业发展的启发”，不要模板化重复。',
+    '- 每条都要有独立的“发生了什么”“为什么重要”“对 Yian 的启发”，不要模板化重复。',
     '- 如果候选里有 podcast 或 blog，可以总结核心观点；如果是 tweet，要基于 tweet 原文和作者 bio 解读，不要夸大。',
     '- 保留 AI、LLM、agent、token、API、open-weight、workflow、eval 等常用英文术语。',
     '- 来源 URL 必须逐条列出。没有 URL 的内容不要写。',
@@ -363,7 +388,7 @@ function buildOpenAIPrompt(data, items) {
     '分类：模型 / Agent、开源、大厂动态、创业公司 / 工具、产品趋势 中选 1-2 个',
     '发生了什么：',
     '为什么重要：',
-    '对产品 / 技术 / 职业发展的启发：',
+    '对 Yian 的启发：',
     '来源：',
     '',
     '三、按主题分类整理',
@@ -452,6 +477,8 @@ async function buildDigestWithOpenAI(data) {
   if (!items.length) return null;
 
   const prompt = buildOpenAIPrompt(data, items);
+  const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
+  const reasoningEffort = process.env.OPENAI_REASONING_EFFORT || DEFAULT_REASONING_EFFORT;
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -459,9 +486,9 @@ async function buildDigestWithOpenAI(data) {
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model,
       input: prompt,
-      temperature: 0.4,
+      reasoning: { effort: reasoningEffort },
       max_output_tokens: 5000
     })
   });
