@@ -3,9 +3,9 @@
 // ============================================================================
 // Follow Builders — Deterministic Briefing Generator
 // ============================================================================
-// Turns prepare-digest.js JSON into a structured Chinese briefing suitable for
-// scheduled email delivery in non-persistent environments, where no LLM is
-// available to remix the feed at cron time.
+// Turns prepare-digest.js JSON into a structured Chinese briefing. If
+// OPENAI_API_KEY is available, it uses the OpenAI API for a natural-language
+// briefing; otherwise it falls back to a deterministic local generator.
 //
 // Usage:
 //   node prepare-digest.js | node generate-briefing.js | node deliver.js
@@ -13,8 +13,14 @@
 // ============================================================================
 
 import { readFile } from 'fs/promises';
+import { join } from 'path';
+import { homedir } from 'os';
+import { config as loadEnv } from 'dotenv';
 
 const MAX_ITEMS = 5;
+const USER_DIR = join(homedir(), '.follow-builders');
+const ENV_PATH = join(USER_DIR, '.env');
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
 
 async function readInput() {
   const args = process.argv.slice(2);
@@ -192,6 +198,9 @@ function buildCandidates(data) {
       id: blog.url,
       sourceType: 'blog',
       sourceName: blog.name || 'Blog',
+      title: stripHtml(blog.title || 'Untitled blog post'),
+      url: blog.url,
+      content: compact(text, 3000),
       score: 95 + relevanceScore(text),
       publishedAt: blog.publishedAt,
       insight: {
@@ -214,6 +223,9 @@ function buildCandidates(data) {
       id: podcast.url,
       sourceType: 'podcast',
       sourceName: podcast.name || 'Podcast',
+      title: stripHtml(podcast.title || 'Untitled podcast episode'),
+      url: podcast.url,
+      content: compact(sentencesFrom(text).slice(0, 45).join(' '), 4500),
       score: 85 + relevanceScore(text),
       publishedAt: podcast.publishedAt,
       insight: {
@@ -243,6 +255,15 @@ function buildCandidates(data) {
         id: tweet.url,
         sourceType: 'x',
         sourceName: builder.name || builder.handle || 'Builder',
+        title: `${builder.name || builder.handle || 'Builder'} on X`,
+        url: tweet.url,
+        content: stripHtml(tweet.text || ''),
+        authorBio: stripHtml(builder.bio || ''),
+        engagement: {
+          likes: tweet.likes || 0,
+          retweets: tweet.retweets || 0,
+          replies: tweet.replies || 0
+        },
         score: 45 + relevanceScore(text) + engagement,
         publishedAt: tweet.createdAt,
         insight: {
@@ -279,6 +300,147 @@ function buildInsights(data) {
     })
     .slice(0, MAX_ITEMS)
     .map((candidate) => candidate.insight);
+}
+
+function buildModelItems(data, limit = 14) {
+  const usedAuthors = new Map();
+  const usedUrls = new Set();
+
+  return buildCandidates(data)
+    .filter((candidate) => relevanceScore(`${candidate.title} ${candidate.content}`) > 0)
+    .sort((a, b) => b.score - a.score)
+    .filter((candidate) => {
+      if (usedUrls.has(candidate.id)) return false;
+      const authorCount = usedAuthors.get(candidate.sourceName) || 0;
+      if (candidate.sourceType === 'x' && authorCount >= 2) return false;
+
+      usedUrls.add(candidate.id);
+      usedAuthors.set(candidate.sourceName, authorCount + 1);
+      return true;
+    })
+    .slice(0, limit)
+    .map((candidate) => ({
+      type: candidate.sourceType,
+      source: candidate.sourceName,
+      title: candidate.title,
+      url: candidate.url,
+      publishedAt: candidate.publishedAt,
+      categoryHint: candidate.insight.category,
+      authorBio: candidate.authorBio,
+      engagement: candidate.engagement,
+      content: candidate.content
+    }));
+}
+
+function buildOpenAIPrompt(data, items) {
+  const date = new Date(data.generatedAt || Date.now()).toISOString().slice(0, 10);
+  const stats = data.stats || {};
+
+  return [
+    '你是一个中文 AI 行业 briefing 作者，读者是非纯技术背景、但关注 AI 产品、技术趋势和职业发展的用户。',
+    '',
+    '请只根据下面 JSON 中的候选内容写一封中文邮件 briefing。不要访问网页，不要编造，不要使用候选内容之外的事实。',
+    '',
+    '硬性要求：',
+    '- 输出简体中文，专业但 conversational，像懂行朋友在解释。',
+    '- 必须选出 5 条 AI 资讯。每条都必须来自候选 JSON，并保留原始 URL。',
+    '- 5 条不要重复同一件事；优先选择信息量高、和 AI 产品/模型/agent/开发者工具相关的内容。',
+    '- 每条都要有独立的“为什么重要”和“对产品 / 技术 / 职业发展的启发”，不要模板化重复。',
+    '- 如果候选里有 podcast 或 blog，可以总结核心观点；如果是 tweet，要基于 tweet 原文和作者 bio 解读，不要夸大。',
+    '- 保留 AI、LLM、agent、token、API、open-weight、workflow、eval 等常用英文术语。',
+    '- 来源 URL 必须逐条列出。没有 URL 的内容不要写。',
+    '- 不要提到你是 AI，不要提到 prompt，不要说“根据 JSON”。',
+    '',
+    '请使用这个固定结构：',
+    `标题：AI Builder Digest - ${date}`,
+    '',
+    '一、今日总览',
+    '用 3-5 句话概括今天的主线。不要空泛。',
+    '',
+    '二、今日最值得关注的 5 条 AI Builder 资讯',
+    '每条格式：',
+    '1. 标题',
+    '分类：模型 / Agent、开源、大厂动态、创业公司 / 工具、产品趋势 中选 1-2 个',
+    '发生了什么：',
+    '为什么重要：',
+    '对产品 / 技术 / 职业发展的启发：',
+    '来源：',
+    '',
+    '三、按主题分类整理',
+    '按 模型 / Agent、开源、大厂动态、创业公司 / 工具、产品趋势 分类。没有强信号就写“今日无强信号”。',
+    '',
+    '四、重要技术名词解释（非纯技术背景版）',
+    '只解释正文里实际出现的 5-8 个术语。',
+    '',
+    '五、可以发 LinkedIn 或面试中引用的 3 条观点',
+    '观点要具体、有判断力。',
+    '',
+    '六、给你的行动建议',
+    '分别给产品视角、技术视角、职业视角建议。',
+    '',
+    '结尾保留：Generated through the Follow Builders skill: https://github.com/zarazhangrui/follow-builders',
+    '',
+    '今日 feed 统计：',
+    JSON.stringify({
+      podcastEpisodes: stats.podcastEpisodes || 0,
+      xBuilders: stats.xBuilders || 0,
+      totalTweets: stats.totalTweets || 0,
+      blogPosts: stats.blogPosts || 0,
+      feedGeneratedAt: stats.feedGeneratedAt || null
+    }, null, 2),
+    '',
+    '候选内容 JSON：',
+    JSON.stringify(items, null, 2)
+  ].join('\n');
+}
+
+function extractResponseText(response) {
+  if (typeof response.output_text === 'string' && response.output_text.trim()) {
+    return response.output_text.trim();
+  }
+
+  const text = (response.output || [])
+    .flatMap((item) => item.content || [])
+    .map((content) => content.text || '')
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+
+  return text;
+}
+
+async function buildDigestWithOpenAI(data) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+
+  const items = buildModelItems(data);
+  if (!items.length) return null;
+
+  const prompt = buildOpenAIPrompt(data, items);
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      input: prompt,
+      temperature: 0.4,
+      max_output_tokens: 5000
+    })
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`OpenAI API error ${response.status}: ${detail}`);
+  }
+
+  const payload = await response.json();
+  const text = extractResponseText(payload);
+  if (!text) throw new Error('OpenAI API returned an empty briefing');
+
+  return text;
 }
 
 function buildOverview(insights) {
@@ -447,11 +609,23 @@ function buildDigest(data) {
 }
 
 async function main() {
+  loadEnv({ path: ENV_PATH });
+
   const raw = await readInput();
   const data = JSON.parse(raw);
 
   if (data.status !== 'ok') {
     throw new Error(data.message || 'prepare-digest did not return ok status');
+  }
+
+  try {
+    const llmDigest = await buildDigestWithOpenAI(data);
+    if (llmDigest) {
+      process.stdout.write(llmDigest);
+      return;
+    }
+  } catch (err) {
+    console.error(`OpenAI briefing failed, falling back to deterministic briefing: ${err.message}`);
   }
 
   process.stdout.write(buildDigest(data));
