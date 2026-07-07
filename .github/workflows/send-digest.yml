@@ -8,7 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DIGEST_TIMEZONE: Europe/Dublin
-      DIGEST_DELIVERY_TIME: "14:20"
+      DIGEST_DELIVERY_TIME: "07:00"
+      DIGEST_FROM: "AI Builders Digest <digest@digest.yianz.me>"
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +41,11 @@ jobs:
             "deliveryTime": "$DIGEST_DELIVERY_TIME",
             "delivery": {
               "method": "email",
-              "email": "yian.zhou2024@hotmail.com"
+              "from": "$DIGEST_FROM",
+              "emails": [
+                "yian.zhou2024@hotmail.com",
+                "wenyig@umich.edu"
+              ]
             },
             "onboardingComplete": true
           }

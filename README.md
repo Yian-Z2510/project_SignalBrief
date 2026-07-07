@@ -2,7 +2,7 @@
 
 Daily Chinese AI Builders Digest delivered by GitHub Actions.
 
-The workflow fetches the public Follow Builders central feeds, turns them into a structured Chinese briefing, and sends the email through Resend.
+The workflow fetches the public Follow Builders central feeds, turns them into a structured Chinese briefing, and sends the email through Resend from `digest@digest.yianz.me`.
 
 ## Setup
 
@@ -17,7 +17,7 @@ GitHub Actions scheduled workflows can be delayed, so this workflow is designed
 to be triggered by an external scheduler via `workflow_dispatch`.
 
 Configure an external cron service, such as cron-job.org, to send a daily POST
-request at your preferred local time.
+request at 07:00 Europe/Dublin.
 
 URL:
 
