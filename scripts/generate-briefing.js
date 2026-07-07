@@ -409,6 +409,14 @@ function extractResponseText(response) {
   return text;
 }
 
+function openAIErrorCode(err) {
+  const message = err?.message || '';
+  const match = message.match(/"code"\s*:\s*"([^"]+)"/);
+  if (match) return match[1];
+  if (message.includes('insufficient_quota')) return 'insufficient_quota';
+  return 'unknown_error';
+}
+
 async function buildDigestWithOpenAI(data) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -625,7 +633,9 @@ async function main() {
       return;
     }
   } catch (err) {
-    console.error(`OpenAI briefing failed, falling back to deterministic briefing: ${err.message}`);
+    console.error(`OpenAI briefing failed: ${openAIErrorCode(err)}`);
+    console.error('Falling back to deterministic briefing');
+    console.error(err.message);
   }
 
   process.stdout.write(buildDigest(data));
