@@ -22,6 +22,7 @@ const USER_DIR = join(homedir(), '.follow-builders');
 const ENV_PATH = join(USER_DIR, '.env');
 const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini';
 const DEFAULT_REASONING_EFFORT = 'medium';
+const DEFAULT_MAX_OUTPUT_TOKENS = 12000;
 const DEFAULT_PROMPT_VERSION = 'ai-digest-yian-style-v1';
 
 const YIAN_STYLE_PROMPT = [
@@ -479,6 +480,7 @@ async function buildDigestWithOpenAI(data) {
   const prompt = buildOpenAIPrompt(data, items);
   const model = process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL;
   const reasoningEffort = process.env.OPENAI_REASONING_EFFORT || DEFAULT_REASONING_EFFORT;
+  const maxOutputTokens = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || DEFAULT_MAX_OUTPUT_TOKENS);
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
@@ -489,7 +491,7 @@ async function buildDigestWithOpenAI(data) {
       model,
       input: prompt,
       reasoning: { effort: reasoningEffort },
-      max_output_tokens: 5000
+      max_output_tokens: maxOutputTokens
     })
   });
 
