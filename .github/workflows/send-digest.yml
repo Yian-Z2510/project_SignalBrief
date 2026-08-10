@@ -47,7 +47,8 @@ jobs:
               "from": "$DIGEST_FROM",
               "emails": [
                 "yian.zhou2024@hotmail.com",
-                "wenyig@umich.edu"
+                "wenyig@umich.edu",
+                "goran229@126.com"
               ]
             },
             "onboardingComplete": true
