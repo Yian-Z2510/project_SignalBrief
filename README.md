@@ -22,7 +22,7 @@ request at 07:00 Europe/Dublin.
 URL:
 
 ```text
-https://api.github.com/repos/Yian-Z2510/Follow_Builders_Digest/actions/workflows/send-digest.yml/dispatches
+https://api.github.com/repos/Yian-Z2510/project_SignalBrief/actions/workflows/send-digest.yml/dispatches
 ```
 
 Headers:
